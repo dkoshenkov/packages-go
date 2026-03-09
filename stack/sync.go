@@ -46,8 +46,9 @@ func (s *Sync[T]) Pop() (v T, ok bool) {
 	if !ok {
 		return *new(T), false
 	}
-	s.data[s.len()-1] = res
-	s.data = s.data[:s.len()-1]
+	idx := s.len() - 1
+	s.data[idx] = *new(T)
+	s.data = s.data[:idx]
 	return res, true
 }
 
