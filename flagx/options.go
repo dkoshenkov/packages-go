@@ -26,6 +26,9 @@ func Type[T any](name string) Option[T] {
 
 func Validate[T any](validator Validator[T]) Option[T] {
 	return optionFunc[T](func(cfg *config[T]) {
+		if validator == nil {
+			return
+		}
 		cfg.validators = append(cfg.validators, validator)
 	})
 }
@@ -33,9 +36,9 @@ func Validate[T any](validator Validator[T]) Option[T] {
 func OneOf[T comparable](allowed ...T) Option[T] {
 	values := make(map[T]struct{}, len(allowed))
 	names := make([]string, 0, len(allowed))
-	for _, value := range allowed {
-		values[value] = struct{}{}
-		names = append(names, fmt.Sprint(value))
+	for _, v := range allowed {
+		values[v] = struct{}{}
+		names = append(names, fmt.Sprint(v))
 	}
 
 	return Validate(func(value T) error {

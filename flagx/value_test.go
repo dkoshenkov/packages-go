@@ -1,6 +1,7 @@
 package flagx
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -107,6 +108,58 @@ func TestBoolPShorthandParseWithoutArgumentSetsTrue(t *testing.T) {
 
 	if !verbose {
 		t.Fatal("verbose = false, want true")
+	}
+}
+
+func TestAnyUsesCustomBoolNoOptDefVal(t *testing.T) {
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	type toggle bool
+
+	var feature toggle
+	Any(flags, "feature", &feature, "Enable feature", Codec[toggle]{
+		Parse: func(value string) (toggle, error) {
+			switch value {
+			case "enabled":
+				return true, nil
+			case "disabled":
+				return false, nil
+			default:
+				return false, errors.New("unexpected")
+			}
+		},
+		Format: func(value toggle) string {
+			if value {
+				return "enabled"
+			}
+
+			return "disabled"
+		},
+		Type:        "toggle",
+		IsBool:      true,
+		NoOptDefVal: "enabled",
+	})
+
+	if err := flags.Parse([]string{"--feature"}); err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	if !feature {
+		t.Fatal("feature = false, want true")
+	}
+}
+
+func TestValidateNilIsIgnored(t *testing.T) {
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	var target string
+
+	String(flags, "target", &target, "Artifacts to generate", Validate[string](nil))
+
+	if err := flags.Set("target", "go"); err != nil {
+		t.Fatalf("Set returned error: %v", err)
+	}
+
+	if target != "go" {
+		t.Fatalf("target = %q, want %q", target, "go")
 	}
 }
 

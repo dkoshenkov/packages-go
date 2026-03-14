@@ -21,6 +21,7 @@ type handlerSpec struct {
 	TypeName         string
 	UseTypeNameParam bool
 	IsBool           bool
+	NoOptDefVal      string
 }
 
 type typeSpec struct {
@@ -38,7 +39,7 @@ func constraint(name string, terms ...string) constraintSpec {
 	}
 }
 
-func staticHandler(name, constraint, typeName string, imports, parseLines, formatLines []string, isBool bool) handlerSpec {
+func staticHandler(name, constraint, typeName string, imports, parseLines, formatLines []string, isBool bool, noOptDefVal string) handlerSpec {
 	return handlerSpec{
 		Name:        name,
 		Constraint:  constraint,
@@ -47,6 +48,7 @@ func staticHandler(name, constraint, typeName string, imports, parseLines, forma
 		FormatLines: formatLines,
 		TypeName:    typeName,
 		IsBool:      isBool,
+		NoOptDefVal: noOptDefVal,
 	}
 }
 
@@ -97,6 +99,7 @@ func newGenerationSpec() generationSpec {
 				list("return T(value), nil"),
 				list("return string(value)"),
 				false,
+				"",
 			),
 			staticHandler(
 				"boolCodec",
@@ -106,6 +109,7 @@ func newGenerationSpec() generationSpec {
 				list("parsed, err := strconv.ParseBool(value)", "return T(parsed), err"),
 				list("return strconv.FormatBool(bool(value))"),
 				true,
+				"true",
 			),
 			numericHandler(
 				"signedIntegerCodec",
@@ -133,6 +137,7 @@ func newGenerationSpec() generationSpec {
 				list("parsed, err := time.ParseDuration(value)", "return T(parsed), err"),
 				list("return time.Duration(value).String()"),
 				false,
+				"",
 			),
 		},
 		types: []typeSpec{

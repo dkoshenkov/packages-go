@@ -28,8 +28,9 @@ func boolCodec[T ~bool]() Codec[T] {
 		Format: func(value T) string {
 			return strconv.FormatBool(bool(value))
 		},
-		Type:   "bool",
-		IsBool: true,
+		Type:        "bool",
+		IsBool:      true,
+		NoOptDefVal: "true",
 	}
 }
 

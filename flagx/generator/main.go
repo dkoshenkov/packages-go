@@ -6,17 +6,14 @@ import (
 	"os"
 )
 
+type generatedOutput struct {
+	path string
+	data []byte
+}
+
 func main() {
 	spec := newGenerationSpec()
-	g := &generator{}
-	outputs := []struct {
-		path string
-		data []byte
-	}{
-		{path: constraintsFile, data: g.constraintsFile(spec)},
-		{path: codecFile, data: g.codecsFile(spec)},
-		{path: flagFile, data: g.flagsFile(spec)},
-	}
+	outputs := generatedOutputs(spec)
 
 	for _, output := range outputs {
 		formatted, err := format.Source(output.data)
@@ -28,4 +25,26 @@ func main() {
 			fail(fmt.Sprintf("write %s", output.path), err)
 		}
 	}
+}
+
+func generatedOutputs(spec generationSpec) []generatedOutput {
+	builders := []struct {
+		path  string
+		build func(*generator, generationSpec) []byte
+	}{
+		{path: constraintsFile, build: (*generator).constraintsFile},
+		{path: codecFile, build: (*generator).codecsFile},
+		{path: flagFile, build: (*generator).flagsFile},
+	}
+
+	outputs := make([]generatedOutput, 0, len(builders))
+	for _, builder := range builders {
+		g := &generator{}
+		outputs = append(outputs, generatedOutput{
+			path: builder.path,
+			data: builder.build(g, spec),
+		})
+	}
+
+	return outputs
 }

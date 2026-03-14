@@ -11,6 +11,8 @@ type Codec[T any] struct {
 	Format Formatter[T]
 	Type   string
 	IsBool bool
+	// NoOptDefVal is passed to pflag for bool-style flags used without an explicit value.
+	NoOptDefVal string
 }
 
 type Option[T any] interface {

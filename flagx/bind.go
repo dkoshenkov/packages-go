@@ -105,12 +105,15 @@ func bind[T any](flagSet *pflag.FlagSet, name string, shorthand string, target *
 
 	flag := flagSet.VarPF(registeredValue, name, shorthand, usage)
 	if codec.IsBool {
-		flag.NoOptDefVal = "true"
+		flag.NoOptDefVal = noOptDefVal(codec)
 	}
 }
 
 func validateValue[T any](raw string, parsed T, validators []Validator[T]) error {
 	for _, validator := range validators {
+		if validator == nil {
+			continue
+		}
 		if err := validator(parsed); err != nil {
 			return fmt.Errorf("invalid value %q: %w", raw, err)
 		}
@@ -122,6 +125,9 @@ func validateValue[T any](raw string, parsed T, validators []Validator[T]) error
 func validateInitialValue[T any](value T, format Formatter[T], validators []Validator[T]) error {
 	rendered := formatValue(value, format)
 	for _, validator := range validators {
+		if validator == nil {
+			continue
+		}
 		if err := validator(value); err != nil {
 			return fmt.Errorf("invalid initial value %q: %w", rendered, err)
 		}
@@ -136,4 +142,12 @@ func formatValue[T any](value T, format Formatter[T]) string {
 	}
 
 	return fmt.Sprint(value)
+}
+
+func noOptDefVal[T any](codec Codec[T]) string {
+	if codec.NoOptDefVal != "" {
+		return codec.NoOptDefVal
+	}
+
+	return "true"
 }

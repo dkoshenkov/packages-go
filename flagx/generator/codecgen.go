@@ -28,6 +28,9 @@ func (g *generator) writeCodec(spec handlerSpec) {
 	g.l("Type: ", codecTypeExpr(spec), ",")
 	if spec.IsBool {
 		g.l("IsBool: true,")
+		if spec.NoOptDefVal != "" {
+			g.l("NoOptDefVal: ", quote(spec.NoOptDefVal), ",")
+		}
 	}
 	g.l("}")
 

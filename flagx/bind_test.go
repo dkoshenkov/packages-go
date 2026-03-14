@@ -9,7 +9,7 @@ import (
 
 func TestValueSetReturnsConstErrorForNilTarget(t *testing.T) {
 	err := (*value[string])(nil).Set("test")
-	if !errors.Is(err, errNilTarget) && !errors.Is(err, errNilTarget) {
+	if !errors.Is(err, errNilTarget) {
 		t.Fatalf("Set error = %v, want %v", err, errNilTarget)
 	}
 }
@@ -18,7 +18,7 @@ func TestValueSetReturnsConstErrorForNilParser(t *testing.T) {
 	var target string
 
 	err := (&value[string]{target: &target}).Set("test")
-	if !errors.Is(err, errNilParser) && !errors.Is(err, errNilParser) {
+	if !errors.Is(err, errNilParser) {
 		t.Fatalf("Set error = %v, want %v", err, errNilParser)
 	}
 }
