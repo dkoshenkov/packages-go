@@ -11,5 +11,5 @@
 
 ## Документация
 
-- `configx`: [README](/Users/dkoshenkov/GolandProjects/packages-go/configx/README.md)
-- `logx`: [README](/Users/dkoshenkov/GolandProjects/packages-go/logx/README.md)
+- `configx`: [README](./configx/README.md)
+- `logx`: [README](./logx/README.md)
