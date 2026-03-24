@@ -6,8 +6,10 @@
 
 - `flagx` — typed-обертка над `pflag` с `Default/Validate/OneOf`.
 - `configx` — загрузка конфига в struct из `flag > vault > env > yaml`.
+- `logx` — обертка над `zerolog` с готовой сервисной конфигурацией.
 - `consterr` — простая строковая ошибка-константа.
 
 ## Документация
 
 - `configx`: [README](/Users/dkoshenkov/GolandProjects/packages-go/configx/README.md)
+- `logx`: [README](/Users/dkoshenkov/GolandProjects/packages-go/logx/README.md)

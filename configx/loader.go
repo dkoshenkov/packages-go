@@ -54,10 +54,14 @@ func Load(ctx context.Context, target any, opts ...Option) error {
 	if parseErr := maybeParseFlags(target, &rt.cfg); parseErr != nil {
 		errs = append(errs, parseErr)
 	}
+
+	if initVaultErr := maybeInitVault(&rt.cfg); initVaultErr != nil {
+		errs = append(errs, initVaultErr)
+	}
 	rt.flags = buildFlagMap(rt.cfg.flagSet)
 
-	if cfg.yamlFile != "" {
-		parsedYAML, yamlErr := loadYAMLFile(cfg.yamlFile)
+	if rt.cfg.yamlFile != "" {
+		parsedYAML, yamlErr := loadYAMLFile(rt.cfg.yamlFile)
 		if yamlErr != nil {
 			errs = append(errs, fmt.Errorf("yaml: %w", yamlErr))
 		} else {
@@ -87,8 +91,16 @@ func Load(ctx context.Context, target any, opts ...Option) error {
 		return errors.Join(errs...)
 	}
 
+	if seedErr := maybeSeedDefaults(ctx, &rt, fields); seedErr != nil {
+		errs = append(errs, seedErr)
+	}
+
+	if rt.cfg.seedOnly {
+		return errors.Join(errs...)
+	}
+
 	profileGroupIsActive := false
-	if cfg.resolveMode == StrictGroup {
+	if rt.cfg.resolveMode == StrictGroup {
 		found, findErr := hasGroupValues(ctx, &rt, fields, true)
 		if findErr != nil {
 			errs = append(errs, findErr)
@@ -111,14 +123,14 @@ func Load(ctx context.Context, target any, opts ...Option) error {
 			continue
 		}
 
-		if shouldUseDefault(cfg.resolveMode, field) {
+		if shouldUseDefault(rt.cfg.resolveMode, field) {
 			if assignDefaultErr := assignDefault(field); assignDefaultErr != nil {
 				errs = append(errs, assignDefaultErr)
 			}
 			continue
 		}
 
-		if field.required && !cfg.allowMissing {
+		if field.required && !rt.cfg.allowMissing {
 			errs = append(errs, fmt.Errorf("%s: required value is missing", field.path))
 		}
 	}
@@ -179,6 +191,10 @@ func maybeParseFlags(target any, cfg *config) error {
 		cfg.flagSet = flagSet
 	}
 
+	if err := bindSystemFlags(flagSet, cfg); err != nil {
+		return fmt.Errorf("bind system flags: %w", err)
+	}
+
 	if err := BindFlags(flagSet, target); err != nil {
 		return fmt.Errorf("bind flags: %w", err)
 	}
@@ -199,6 +215,24 @@ func maybeParseFlags(target any, cfg *config) error {
 		return fmt.Errorf("parse flags: %w", err)
 	}
 
+	if err := applySystemFlags(flagSet, cfg); err != nil {
+		return fmt.Errorf("system flags: %w", err)
+	}
+
+	return nil
+}
+
+func maybeInitVault(cfg *config) error {
+	if cfg.vault != nil || cfg.vaultCredentials == nil {
+		return nil
+	}
+
+	vault, err := newVaultReader(*cfg.vaultCredentials)
+	if err != nil {
+		return err
+	}
+
+	cfg.vault = vault
 	return nil
 }
 

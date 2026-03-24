@@ -145,3 +145,22 @@ func TestLoadWithParseFlagsFailsWhenAlreadyParsed(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestLoadWithParseFlagsSupportsVaultCredentialsFlags(t *testing.T) {
+	type cfg struct{}
+
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	var got cfg
+	err := Load(context.Background(), &got,
+		WithProfile("dev"),
+		WithFlagSet(flags),
+		ParseFlags(
+			"--cfgx-vault-address=http://127.0.0.1:8200",
+			"--cfgx-vault-path=secret/data/myapp",
+			"--cfgx-vault-token=token-from-flag",
+		),
+	)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+}
