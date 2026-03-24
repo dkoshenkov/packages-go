@@ -40,3 +40,27 @@ const (
 	yamlPartsSeparator = "."
 	flagPartsSeparator = "-"
 )
+
+const (
+	seedTargetVault = "vault"
+	seedTargetYAML  = "yaml"
+	seedTargetENV   = "env"
+)
+
+const (
+	flagSeedDefaults = "cfgx-seed-defaults"
+	flagSeedTargets  = "cfgx-seed-targets"
+	flagSeedForce    = "cfgx-seed-force"
+	flagSeedYAMLFile = "cfgx-seed-yaml-file"
+	flagSeedENVFile  = "cfgx-seed-env-file"
+	flagSeedOnly     = "cfgx-seed-only"
+	flagVaultAddress = "cfgx-vault-address"
+	flagVaultToken   = "cfgx-vault-token"
+	flagVaultNS      = "cfgx-vault-namespace"
+	flagVaultPath    = "cfgx-vault-path"
+)
+
+const (
+	defaultSeedYAMLFile = "config.yaml"
+	defaultSeedENVFile  = ".env"
+)

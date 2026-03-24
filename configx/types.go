@@ -23,6 +23,19 @@ type VaultReader interface {
 	Get(ctx context.Context, key string) (value string, ok bool, err error)
 }
 
+// VaultSeeder can persist generated defaults/placeholders into vault.
+type VaultSeeder interface {
+	SeedDefaults(ctx context.Context, values map[string]any, force bool) error
+}
+
+// VaultCredentials describes how to connect to Vault.
+type VaultCredentials struct {
+	Address   string
+	Token     string
+	Namespace string
+	Path      string
+}
+
 // Option customizes config loading behavior.
 type Option interface {
 	apply(*config)
@@ -35,12 +48,19 @@ func (f optionFunc) apply(cfg *config) {
 }
 
 type config struct {
-	flagSet      *pflag.FlagSet
-	vault        VaultReader
-	yamlFile     string
-	profile      string
-	resolveMode  ResolveMode
-	allowMissing bool
-	parseFlags   bool
-	parseArgs    []string
+	flagSet          *pflag.FlagSet
+	vault            VaultReader
+	vaultCredentials *VaultCredentials
+	yamlFile         string
+	profile          string
+	resolveMode      ResolveMode
+	allowMissing     bool
+	parseFlags       bool
+	parseArgs        []string
+	seedDefaults     bool
+	seedTargets      map[string]struct{}
+	seedForce        bool
+	seedYAMLFile     string
+	seedENVFile      string
+	seedOnly         bool
 }
