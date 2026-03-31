@@ -1,0 +1,71 @@
+version: "2"
+
+run:
+  go: "1.25"
+  tests: true
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - errcheck
+    - errorlint
+    - govet
+    - ineffassign
+    - misspell
+    - nestif
+    - nilerr
+    - noctx
+    - nolintlint
+    - revive
+    - staticcheck
+    - unconvert
+    - usestdlibvars
+    - whitespace
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    nestif:
+      min-complexity: 4
+    revive:
+      confidence: 0.8
+      rules:
+        - name: atomic
+        - name: bare-return
+        - name: bool-literal-in-expr
+        - name: early-return
+        - name: empty-block
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: identical-branches
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: range-val-in-closure
+        - name: redundant-import-alias
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: useless-break
+        - name: var-declaration
+        - name: waitgroup-by-value
+  exclusions:
+    generated: strict
+    rules:
+      - path: _test\.go
+        linters:
+          - funlen
+          - gocognit
+          - nestif
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
