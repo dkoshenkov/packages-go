@@ -15,6 +15,10 @@ type LoggerFunc func(ctx context.Context, event Event)
 
 // Log calls f(ctx, event).
 func (f LoggerFunc) Log(ctx context.Context, event Event) {
+	if f == nil {
+		return
+	}
+
 	f(ctx, event)
 }
 

@@ -180,3 +180,17 @@ func TestLogging(t *testing.T) {
 	require.Equal(t, "r1", events[0].RequestID)
 	require.Equal(t, "payload", events[1].Fields["req"])
 }
+
+func TestLoggingIgnoresTypedNilLoggerFunc(t *testing.T) {
+	t.Parallel()
+
+	var logger Logger = LoggerFunc(nil)
+
+	handler := Chain(func(_ context.Context, req string) (string, error) {
+		return req + "-ok", nil
+	}, Logging[string, string](logger))
+
+	resp, err := handler(context.Background(), "payload")
+	require.NoError(t, err)
+	require.Equal(t, "payload-ok", resp)
+}
