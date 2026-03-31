@@ -2,7 +2,6 @@ package logx
 
 import (
 	"fmt"
-	"io"
 	"sort"
 
 	"github.com/rs/zerolog"
@@ -37,7 +36,7 @@ func New(serviceName string, opts ...Option) (zerolog.Logger, error) {
 		cfg.level = level
 	}
 
-	var writer io.Writer = cfg.writer
+	writer := cfg.writer
 	if cfg.pretty {
 		writer = zerolog.ConsoleWriter{
 			Out:        cfg.writer,

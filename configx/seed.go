@@ -41,46 +41,65 @@ func maybeSeedDefaults(ctx context.Context, rt *runtime, fields []fieldSpec) err
 	var errs []error
 
 	if _, ok := targets[seedTargetYAML]; ok {
-		yamlPath := chooseSeedYAMLPath(rt.cfg)
-		if err := seedYAMLFile(yamlPath, entries, rt.cfg.seedForce); err != nil {
+		if err := seedYAMLTarget(rt, entries); err != nil {
 			errs = append(errs, fmt.Errorf("seed yaml: %w", err))
-		} else if rt.cfg.yamlFile == yamlPath {
-			reloaded, err := loadYAMLFile(yamlPath)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("reload yaml: %w", err))
-			} else {
-				rt.yaml = reloaded
-			}
 		}
 	}
 
 	if _, ok := targets[seedTargetENV]; ok {
-		envPath := chooseSeedENVPath(rt.cfg)
-		if err := seedENVFile(envPath, entries, rt.cfg.seedForce); err != nil {
+		if err := seedENVTarget(rt, entries); err != nil {
 			errs = append(errs, fmt.Errorf("seed env: %w", err))
 		}
 	}
 
 	if _, ok := targets[seedTargetVault]; ok {
-		if rt.cfg.vault == nil {
-			errs = append(errs, errSeedVaultSourceMissing)
-		} else {
-			seeder, ok := rt.cfg.vault.(VaultSeeder)
-			if !ok {
-				errs = append(errs, errSeedVaultWriterMissing)
-			} else {
-				values := make(map[string]any, len(entries))
-				for _, entry := range entries {
-					values[entry.envKey] = entry.vaultValue
-				}
-				if err := seeder.SeedDefaults(ctx, values, rt.cfg.seedForce); err != nil {
-					errs = append(errs, fmt.Errorf("seed vault: %w", err))
-				}
-			}
+		if err := seedVaultTarget(ctx, rt, entries); err != nil {
+			errs = append(errs, fmt.Errorf("seed vault: %w", err))
 		}
 	}
 
 	return errors.Join(errs...)
+}
+
+func seedYAMLTarget(rt *runtime, entries []seedEntry) error {
+	yamlPath := chooseSeedYAMLPath(rt.cfg)
+	if err := seedYAMLFile(yamlPath, entries, rt.cfg.seedForce); err != nil {
+		return err
+	}
+	if rt.cfg.yamlFile != yamlPath {
+		return nil
+	}
+
+	reloaded, err := loadYAMLFile(yamlPath)
+	if err != nil {
+		return fmt.Errorf("reload yaml: %w", err)
+	}
+
+	rt.yaml = reloaded
+	return nil
+}
+
+func seedENVTarget(rt *runtime, entries []seedEntry) error {
+	envPath := chooseSeedENVPath(rt.cfg)
+	return seedENVFile(envPath, entries, rt.cfg.seedForce)
+}
+
+func seedVaultTarget(ctx context.Context, rt *runtime, entries []seedEntry) error {
+	if rt.cfg.vault == nil {
+		return errSeedVaultSourceMissing
+	}
+
+	seeder, ok := rt.cfg.vault.(VaultSeeder)
+	if !ok {
+		return errSeedVaultWriterMissing
+	}
+
+	values := make(map[string]any, len(entries))
+	for _, entry := range entries {
+		values[entry.envKey] = entry.vaultValue
+	}
+
+	return seeder.SeedDefaults(ctx, values, rt.cfg.seedForce)
 }
 
 func buildSeedEntries(rt *runtime, fields []fieldSpec) ([]seedEntry, error) {

@@ -59,22 +59,21 @@ func collectFields(value reflect.Value, typ reflect.Type, keyPath []string, stru
 		path := strings.Join(nextStructPath, ".")
 
 		fieldValue := value.Field(i)
-		if nestedValue, nestedType, nested := nestedStructValue(fieldValue, fieldType.Type); nested {
-			if hasCfgxTaggedFields(nestedType) {
-				if spec.hasDefault {
-					errs = append(errs, fmt.Errorf("%s: default is not supported on nested struct field", path))
-					continue
-				}
-				if !spec.required {
-					errs = append(errs, fmt.Errorf("%s: optional is not supported on nested struct field", path))
-					continue
-				}
-
-				nestedFields, nestedErrs := collectFields(nestedValue, nestedType, nextKeyPath, nextStructPath)
-				fields = append(fields, nestedFields...)
-				errs = append(errs, nestedErrs...)
+		nestedValue, nestedType, nested := nestedStructValue(fieldValue, fieldType.Type)
+		if nested && hasCfgxTaggedFields(nestedType) {
+			if spec.hasDefault {
+				errs = append(errs, fmt.Errorf("%s: default is not supported on nested struct field", path))
 				continue
 			}
+			if !spec.required {
+				errs = append(errs, fmt.Errorf("%s: optional is not supported on nested struct field", path))
+				continue
+			}
+
+			nestedFields, nestedErrs := collectFields(nestedValue, nestedType, nextKeyPath, nextStructPath)
+			fields = append(fields, nestedFields...)
+			errs = append(errs, nestedErrs...)
+			continue
 		}
 
 		if !isSupportedType(fieldType.Type) {
