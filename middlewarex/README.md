@@ -85,6 +85,9 @@ HTTP-specific middleware:
 - `RequireMethod`
 - `RequestID`
 - `CORS`
+- `JSON`
+- `Response[T]`
+- `Runtime`
 - `Adapt`
 - `Wrap`
 - `WrapFunc`
@@ -118,28 +121,34 @@ func (verifier) Verify(_ context.Context, token string) (middlewarex.Identity, e
 }
 
 func main() {
-	handler := httpx.Adapt(httpx.Chain(
-		httpx.FromHTTPFunc(func(w http.ResponseWriter, r *http.Request) error {
-			identity, _ := middlewarex.IdentityFromContext(r.Context())
-			_, _ = w.Write([]byte(identity.Subject))
-			return nil
-		}),
-		httpx.RequestID(),
-		httpx.Auth(verifier{}),
-		middlewarex.RequireAuth[httpx.Exchange, struct{}](),
-		middlewarex.RequireRoles[httpx.Exchange, struct{}]("admin"),
-		httpx.RequireHeader("X-Tenant-ID"),
-		httpx.RequireMethod(http.MethodGet),
-		httpx.CORS(
-			httpx.WithAllowedOrigins("https://example.com"),
-			httpx.WithAllowedMethods(http.MethodGet),
-			httpx.WithAllowedHeaders("Authorization", "X-Tenant-ID"),
-		),
-	))
+	type request struct {
+		Name string `json:"name"`
+	}
+
+	type response struct {
+		Message string `json:"message"`
+	}
+
+	runtime := httpx.NewRuntime()
+
+	handler := httpx.JSON(
+		func(ctx context.Context, req request) (httpx.Response[response], error) {
+			identity, ok := middlewarex.IdentityFromContext(ctx)
+			if !ok {
+				return httpx.Response[response]{}, middlewarex.Unauthorized(errors.New("identity is missing"))
+			}
+
+			return httpx.OK(response{Message: "hello, " + identity.Subject + ": " + req.Name}), nil
+		},
+		httpx.WithRuntime[request, response](runtime),
+	)
 
 	_ = http.ListenAndServe(":8080", handler)
 }
 ```
+
+Старый `Adapt(...)` остаётся для plain `http.Handler`, а `JSON(...)` закрывает typed request/response, JSON decode/encode и централизованный error handling.
+Для runtime-конфига можно использовать `httpx.LoadDefaultRuntime(...)` с `configx`.
 
 ## Error Model
 

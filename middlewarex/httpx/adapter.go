@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/dkoshenkov/packages-go/middlewarex"
 )
@@ -32,6 +33,10 @@ func (f ErrorEncoderFunc) Encode(w http.ResponseWriter, r *http.Request, err err
 	f(w, r, err)
 }
 
+type optionMarker interface {
+	option()
+}
+
 type adaptConfig struct {
 	statusMapper StatusMapper
 	errorEncoder ErrorEncoder
@@ -39,27 +44,83 @@ type adaptConfig struct {
 
 // AdaptOption customizes adapter behavior.
 type AdaptOption interface {
-	apply(*adaptConfig)
+	applyAdapt(*adaptConfig)
+}
+
+// ErrorOption customizes error writing behavior.
+type ErrorOption interface {
+	applyError(*errorConfig)
+}
+
+// RuntimeOption customizes runtime defaults.
+type RuntimeOption interface {
+	applyRuntime(*runtimeConfig)
 }
 
 type adaptOptionFunc func(*adaptConfig)
 
-func (f adaptOptionFunc) apply(cfg *adaptConfig) {
+func (f adaptOptionFunc) applyAdapt(cfg *adaptConfig) {
 	f(cfg)
 }
 
+type errorConfig struct {
+	statusMapper StatusMapper
+	errorEncoder ErrorEncoder
+}
+
+type runtimeConfig struct {
+	logger          middlewarex.Logger
+	statusMapper    StatusMapper
+	errorEncoder    ErrorEncoder
+	timeout         time.Duration
+	requestIDHeader string
+	logRequests     bool
+}
+
+type statusMapperOption struct {
+	statusMapper StatusMapper
+}
+
+func (statusMapperOption) option() {}
+
+func (o statusMapperOption) applyAdapt(cfg *adaptConfig) {
+	cfg.statusMapper = o.statusMapper
+}
+
+func (o statusMapperOption) applyError(cfg *errorConfig) {
+	cfg.statusMapper = o.statusMapper
+}
+
+func (o statusMapperOption) applyRuntime(cfg *runtimeConfig) {
+	cfg.statusMapper = o.statusMapper
+}
+
+type errorEncoderOption struct {
+	errorEncoder ErrorEncoder
+}
+
+func (errorEncoderOption) option() {}
+
+func (o errorEncoderOption) applyAdapt(cfg *adaptConfig) {
+	cfg.errorEncoder = o.errorEncoder
+}
+
+func (o errorEncoderOption) applyError(cfg *errorConfig) {
+	cfg.errorEncoder = o.errorEncoder
+}
+
+func (o errorEncoderOption) applyRuntime(cfg *runtimeConfig) {
+	cfg.errorEncoder = o.errorEncoder
+}
+
 // WithStatusMapper sets error status resolver.
-func WithStatusMapper(statusMapper StatusMapper) AdaptOption {
-	return adaptOptionFunc(func(cfg *adaptConfig) {
-		cfg.statusMapper = statusMapper
-	})
+func WithStatusMapper(statusMapper StatusMapper) statusMapperOption {
+	return statusMapperOption{statusMapper: statusMapper}
 }
 
 // WithErrorEncoder sets custom error encoder.
-func WithErrorEncoder(errorEncoder ErrorEncoder) AdaptOption {
-	return adaptOptionFunc(func(cfg *adaptConfig) {
-		cfg.errorEncoder = errorEncoder
-	})
+func WithErrorEncoder(errorEncoder ErrorEncoder) errorEncoderOption {
+	return errorEncoderOption{errorEncoder: errorEncoder}
 }
 
 // DefaultStatusMapper returns default HTTP status for classified error.
@@ -93,6 +154,27 @@ func DefaultErrorEncoder(statusMapper StatusMapper) ErrorEncoder {
 	})
 }
 
+// WriteError writes error response using configured or default encoder.
+func WriteError(w http.ResponseWriter, r *http.Request, err error, opts ...ErrorOption) {
+	cfg := errorConfig{
+		statusMapper: StatusMapperFunc(DefaultStatusMapper),
+	}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt.applyError(&cfg)
+	}
+	if cfg.statusMapper == nil {
+		cfg.statusMapper = StatusMapperFunc(DefaultStatusMapper)
+	}
+	if cfg.errorEncoder == nil {
+		cfg.errorEncoder = DefaultErrorEncoder(cfg.statusMapper)
+	}
+
+	cfg.errorEncoder.Encode(w, r, err)
+}
+
 // Adapt converts error-returning handler to http.Handler.
 func Adapt(handler Handler, opts ...AdaptOption) http.Handler {
 	cfg := adaptConfig{
@@ -102,7 +184,7 @@ func Adapt(handler Handler, opts ...AdaptOption) http.Handler {
 		if opt == nil {
 			continue
 		}
-		opt.apply(&cfg)
+		opt.applyAdapt(&cfg)
 	}
 	if cfg.statusMapper == nil {
 		cfg.statusMapper = StatusMapperFunc(DefaultStatusMapper)
