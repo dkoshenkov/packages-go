@@ -245,6 +245,29 @@ func TestNestedKeysAndOverrides(t *testing.T) {
 	}
 }
 
+func TestOptionalNestedStructCanBeMissing(t *testing.T) {
+	type redisCfg struct {
+		Addr     string `cfgx:"addr"`
+		Password string `cfgx:"password"`
+	}
+	type cfg struct {
+		Redis redisCfg `cfgx:"redis,optional"`
+	}
+
+	var got cfg
+	err := Load(context.Background(), &got, WithProfile("dev"))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	if got.Redis.Addr != "" {
+		t.Fatalf("redis.addr = %q, want empty", got.Redis.Addr)
+	}
+	if got.Redis.Password != "" {
+		t.Fatalf("redis.password = %q, want empty", got.Redis.Password)
+	}
+}
+
 func TestYAMLOverrideTag(t *testing.T) {
 	type cfg struct {
 		Name string `cfgx:"name" yaml:"custom.name"`

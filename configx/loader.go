@@ -77,7 +77,7 @@ func Load(ctx context.Context, target any, opts ...Option) error {
 		rt.profileEnvPrefix, rt.profileYAMLPrefix = profilePrefixes(profile)
 	}
 
-	fields, collectErrs := collectFields(targetValue, targetType, nil, nil)
+	fields, collectErrs := collectFields(targetValue, targetType, nil, nil, false)
 	errs = append(errs, collectErrs...)
 
 	if len(fields) == 0 {

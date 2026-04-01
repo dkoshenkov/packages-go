@@ -29,7 +29,7 @@ func BindFlags(flagSet *pflag.FlagSet, target any) error {
 		return err
 	}
 
-	fields, fieldErrs := collectFields(targetValue, targetType, nil, nil)
+	fields, fieldErrs := collectFields(targetValue, targetType, nil, nil, false)
 	if len(fieldErrs) > 0 {
 		return joinErrors(fieldErrs)
 	}
