@@ -2,11 +2,13 @@ package logx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
+	"github.com/dkoshenkov/packages-go/middlewarex"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,6 +76,58 @@ func TestNewReturnsErrorForInvalidOptions(t *testing.T) {
 	_, err = New("billing", WithLevelText("not-a-level"))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "parse level")
+}
+
+func TestContextHelpersUseLoggerFromContext(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+
+	logger, err := New("orders-api", WithWriter(&out), WithoutTimestamp(), WithoutCaller())
+	require.NoError(t, err)
+
+	ctx := WithContext(context.Background(), logger)
+	ctx = middlewarex.WithRequestID(ctx, "rid-1")
+	ctx = middlewarex.WithIdentity(ctx, middlewarex.Identity{Subject: "user-1"})
+
+	InfoMsg(ctx, "service started")
+	entry := decodeJSONEntry(t, out.String())
+
+	require.Equal(t, "info", entry["level"])
+	require.Equal(t, "service started", entry["message"])
+	require.Equal(t, "orders-api", entry["service"])
+	require.Equal(t, "rid-1", entry["request_id"])
+	require.Equal(t, "user-1", entry["subject"])
+}
+
+func TestNewLogContextBuildsLoggerFromOptions(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+
+	ctx, err := NewLogContext(context.Background(), "billing-api",
+		WithWriter(&out),
+		WithoutTimestamp(),
+		WithoutCaller(),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, ctx)
+
+	InfoMsg(ctx, "service started")
+	entry := decodeJSONEntry(t, out.String())
+
+	require.Equal(t, "billing-api", entry["service"])
+	require.Equal(t, "service started", entry["message"])
+}
+
+func TestContextHelpersHandleNilContext(t *testing.T) {
+	t.Parallel()
+
+	require.NotPanics(t, func() {
+		InfoMsg(nil, "discarded")
+		WarnMsg(nil, "discarded")
+		ErrorMsg(nil, "discarded")
+	})
 }
 
 func decodeJSONEntry(t *testing.T, raw string) map[string]any {

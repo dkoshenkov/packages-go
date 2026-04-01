@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dkoshenkov/packages-go/logx"
 	"github.com/dkoshenkov/packages-go/middlewarex"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 // Response describes typed HTTP response envelope.
@@ -199,13 +201,13 @@ func JSON[Req, Resp any](handler middlewarex.Handler[Req, Response[Resp]], opts 
 		r = runtime.prepareRequest(writer, r)
 		startedAt := time.Now()
 		if runtime.logRequests {
-			logRequestStart(runtime.Logger, r)
+			logRequestStart(runtime.Logger, runtime.contextLoggerSet, r)
 		}
 
 		req, err := cfg.decoder(r)
 		if err != nil {
 			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, r, startedAt, cfg.statusMapper.Status(err), err)
+				logRequestFinish(runtime.Logger, runtime.contextLoggerSet, r, startedAt, cfg.statusMapper.Status(err), err)
 			}
 			WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
 			return
@@ -214,14 +216,14 @@ func JSON[Req, Resp any](handler middlewarex.Handler[Req, Response[Resp]], opts 
 		resp, err := wrapped(r.Context(), req)
 		if err != nil {
 			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, r, startedAt, cfg.statusMapper.Status(err), err)
+				logRequestFinish(runtime.Logger, runtime.contextLoggerSet, r, startedAt, cfg.statusMapper.Status(err), err)
 			}
 			WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
 			return
 		}
 		if err := cfg.encoder(writer, r, resp); err != nil {
 			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, r, startedAt, cfg.statusMapper.Status(err), err)
+				logRequestFinish(runtime.Logger, runtime.contextLoggerSet, r, startedAt, cfg.statusMapper.Status(err), err)
 			}
 			if !writer.Written() {
 				WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
@@ -229,7 +231,7 @@ func JSON[Req, Resp any](handler middlewarex.Handler[Req, Response[Resp]], opts 
 			return
 		}
 		if runtime.logRequests {
-			logRequestFinish(runtime.Logger, r, startedAt, responseStatus(resp.Status, resp.Body), nil)
+			logRequestFinish(runtime.Logger, runtime.contextLoggerSet, r, startedAt, responseStatus(resp.Status, resp.Body), nil)
 		}
 	})
 }
@@ -303,36 +305,52 @@ func (rt Runtime) prepareRequest(w http.ResponseWriter, r *http.Request) *http.R
 
 	w.Header().Set(headerName, requestID)
 	ctx := middlewarex.WithRequestID(r.Context(), requestID)
+	if rt.contextLoggerSet {
+		ctx = logx.WithContext(ctx, rt.contextLogger)
+	}
 	return r.WithContext(ctx)
 }
 
 func runtimeMiddlewares[Req, Resp any](rt Runtime) []middlewarex.Middleware[Req, Response[Resp]] {
 	var result []middlewarex.Middleware[Req, Response[Resp]]
-	result = append(result, middlewarex.Recovery[Req, Response[Resp]](rt.Logger))
+	if rt.Logger != nil {
+		result = append(result, middlewarex.Recovery[Req, Response[Resp]](rt.Logger))
+	} else if rt.contextLoggerSet {
+		result = append(result, middlewarex.RecoveryContext[Req, Response[Resp]]())
+	}
 	if rt.timeout > 0 {
 		result = append(result, middlewarex.Timeout[Req, Response[Resp]](rt.timeout))
 	}
 	return result
 }
 
-func logRequestStart(logger middlewarex.Logger, r *http.Request) {
-	if logger == nil || r == nil {
+func logRequestStart(logger middlewarex.Logger, useContextLogger bool, r *http.Request) {
+	if r == nil || (!useContextLogger && logger == nil) {
 		return
 	}
 
-	logger.Log(r.Context(), middlewarex.Event{
-		Level:   "info",
-		Name:    "http",
-		Message: "request started",
-		Fields: map[string]any{
-			"method": r.Method,
-			"path":   r.URL.Path,
-		},
-	})
+	if logger != nil {
+		logger.Log(r.Context(), middlewarex.Event{
+			Level:   "info",
+			Name:    "http",
+			Message: "request started",
+			Fields: map[string]any{
+				"method": r.Method,
+				"path":   r.URL.Path,
+			},
+		})
+		return
+	}
+
+	logx.Log(r.Context(), zerolog.InfoLevel).
+		Str("name", "http").
+		Str("method", r.Method).
+		Str("path", r.URL.Path).
+		Msg("request started")
 }
 
-func logRequestFinish(logger middlewarex.Logger, r *http.Request, startedAt time.Time, status int, err error) {
-	if logger == nil || r == nil {
+func logRequestFinish(logger middlewarex.Logger, useContextLogger bool, r *http.Request, startedAt time.Time, status int, err error) {
+	if r == nil || (!useContextLogger && logger == nil) {
 		return
 	}
 
@@ -340,16 +358,34 @@ func logRequestFinish(logger middlewarex.Logger, r *http.Request, startedAt time
 	if err != nil {
 		level = "error"
 	}
-	logger.Log(r.Context(), middlewarex.Event{
-		Level:    level,
-		Name:     "http",
-		Message:  "request finished",
-		Duration: time.Since(startedAt),
-		Err:      err,
-		Fields: map[string]any{
-			"method": r.Method,
-			"path":   r.URL.Path,
-			"status": status,
-		},
-	})
+	if logger != nil {
+		logger.Log(r.Context(), middlewarex.Event{
+			Level:    level,
+			Name:     "http",
+			Message:  "request finished",
+			Duration: time.Since(startedAt),
+			Err:      err,
+			Fields: map[string]any{
+				"method": r.Method,
+				"path":   r.URL.Path,
+				"status": status,
+			},
+		})
+		return
+	}
+
+	entry := logx.Log(r.Context(), zerolog.InfoLevel)
+	if err != nil {
+		entry = logx.Log(r.Context(), zerolog.ErrorLevel)
+	}
+	entry.
+		Str("name", "http").
+		Str("method", r.Method).
+		Str("path", r.URL.Path).
+		Int("status", status).
+		Dur("duration", time.Since(startedAt))
+	if err != nil {
+		entry.Err(err)
+	}
+	entry.Msg("request finished")
 }

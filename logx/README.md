@@ -14,13 +14,14 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/dkoshenkov/packages-go/logx"
 )
 
 func main() {
-	logger, err := logx.New("payments-api",
+	ctx, err := logx.NewLogContext(context.Background(), "payments-api",
 		logx.WithWriter(os.Stdout),
 		logx.WithLevelText("debug"),
 		logx.WithField("env", "dev"),
@@ -29,9 +30,18 @@ func main() {
 		panic(err)
 	}
 
-	logger.Info().Msg("service started")
+	logx.InfoMsg(ctx, "service started")
 }
 ```
+
+## Контекстный API
+
+- `NewLogContext(context.Context, string, ...Option)` создает логгер через `New` и кладет его в `context`
+- `WithContext(context.Context, zerolog.Logger)` кладет логгер в `context`
+- `FromContext(context.Context)` возвращает логгер из `context`
+- `LogMsg(context.Context, zerolog.Level, string)` пишет сообщение с явным уровнем
+- `TraceMsg/DebugMsg/InfoMsg/WarnMsg/ErrorMsg/FatalMsg/PanicMsg(context.Context, string)` пишут сообщение без `.Msg(...)`
+- `Trace/Debug/Info/Warn/Error/Fatal/Panic(context.Context)` возвращают `*zerolog.Event` для сложных случаев с полями
 
 ## Опции
 
