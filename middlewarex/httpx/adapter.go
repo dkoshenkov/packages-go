@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dkoshenkov/packages-go/middlewarex"
+	"github.com/rs/zerolog"
 )
 
 // StatusMapper resolves HTTP status code for error.
@@ -69,12 +70,14 @@ type errorConfig struct {
 }
 
 type runtimeConfig struct {
-	logger          middlewarex.Logger
-	statusMapper    StatusMapper
-	errorEncoder    ErrorEncoder
-	timeout         time.Duration
-	requestIDHeader string
-	logRequests     bool
+	logger           middlewarex.Logger
+	contextLogger    zerolog.Logger
+	contextLoggerSet bool
+	statusMapper     StatusMapper
+	errorEncoder     ErrorEncoder
+	timeout          time.Duration
+	requestIDHeader  string
+	logRequests      bool
 }
 
 type statusMapperOption struct {

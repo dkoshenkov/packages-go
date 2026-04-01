@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dkoshenkov/packages-go/configx"
+	"github.com/dkoshenkov/packages-go/logx"
 	"github.com/dkoshenkov/packages-go/middlewarex"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -233,7 +234,7 @@ func TestDefaultRuntime(t *testing.T) {
 		PrettyLogs:      true,
 	})
 	require.NoError(t, err)
-	require.NotNil(t, rt.Logger)
+	require.Nil(t, rt.Logger)
 	require.NotNil(t, rt.StatusMapper)
 	require.NotNil(t, rt.ErrorEncoder)
 	require.Equal(t, "X-Correlation-ID", rt.requestIDHeader)
@@ -279,21 +280,15 @@ func TestWithZerolog(t *testing.T) {
 	logger := zerolog.New(buf)
 	rt := NewRuntime(WithZerolog(logger))
 
-	require.NotNil(t, rt.Logger)
-	rt.Logger.Log(context.Background(), middlewarex.Event{
-		Level:     "error",
-		Name:      "http",
-		Message:   "failed",
-		RequestID: "rid-1",
-		Subject:   "user-1",
-		Fields: map[string]any{
-			"method": "POST",
-		},
-		Err: errors.New("boom"),
-	})
+	require.Nil(t, rt.Logger)
 
-	require.Contains(t, buf.String(), `"message":"failed"`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/items", nil)
+	req.Header.Set("X-Request-ID", "rid-1")
+	req = rt.prepareRequest(rec, req)
+
+	logx.Info(req.Context()).Msg("context logger works")
+
+	require.Contains(t, buf.String(), `"message":"context logger works"`)
 	require.Contains(t, buf.String(), `"request_id":"rid-1"`)
-	require.Contains(t, buf.String(), `"subject":"user-1"`)
-	require.Contains(t, buf.String(), `"method":"POST"`)
 }

@@ -1,11 +1,13 @@
 package middlewarex
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -193,4 +195,53 @@ func TestLoggingIgnoresTypedNilLoggerFunc(t *testing.T) {
 	resp, err := handler(context.Background(), "payload")
 	require.NoError(t, err)
 	require.Equal(t, "payload-ok", resp)
+}
+
+func TestRecoveryContextLogsToContextLogger(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	logger := zerolog.New(&out)
+	ctx := logger.WithContext(context.Background())
+	ctx = WithRequestID(ctx, "rid-1")
+
+	handler := Chain(func(_ context.Context, _ string) (string, error) {
+		panic("kaboom")
+	}, RecoveryContext[string, string]())
+
+	_, err := handler(ctx, "")
+	require.True(t, IsInternal(err))
+	require.Contains(t, out.String(), `"message":"panic recovered"`)
+	require.Contains(t, out.String(), `"request_id":"rid-1"`)
+}
+
+func TestLoggingContextLogsToContextLogger(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	logger := zerolog.New(&out)
+	ctx := logger.WithContext(context.Background())
+	ctx = WithRequestID(ctx, "rid-1")
+	ctx = WithIdentity(ctx, Identity{Subject: "user-1"})
+
+	handler := Chain(func(_ context.Context, req string) (string, error) {
+		return req + "-ok", nil
+	}, LoggingContext[string, string](
+		WithLogName[string, string]("test"),
+		WithLogFields[string, string](func(_ context.Context, req string, resp string, err error) map[string]any {
+			return map[string]any{
+				"req":     req,
+				"resp":    resp,
+				"err_nil": err == nil,
+			}
+		}),
+	))
+
+	resp, err := handler(ctx, "payload")
+	require.NoError(t, err)
+	require.Equal(t, "payload-ok", resp)
+	require.Contains(t, out.String(), `"name":"test"`)
+	require.Contains(t, out.String(), `"request_id":"rid-1"`)
+	require.Contains(t, out.String(), `"subject":"user-1"`)
+	require.Contains(t, out.String(), `"req":"payload"`)
 }

@@ -27,9 +27,11 @@ type Config struct {
 
 // Runtime carries shared HTTP transport defaults.
 type Runtime struct {
-	Logger       middlewarex.Logger
-	StatusMapper StatusMapper
-	ErrorEncoder ErrorEncoder
+	Logger           middlewarex.Logger
+	StatusMapper     StatusMapper
+	ErrorEncoder     ErrorEncoder
+	contextLogger    zerolog.Logger
+	contextLoggerSet bool
 
 	timeout           time.Duration
 	requestIDHeader   string
@@ -50,9 +52,20 @@ func WithLogger(logger middlewarex.Logger) RuntimeOption {
 	})
 }
 
-// WithZerolog adapts zerolog logger to middlewarex runtime logger.
+// WithContextLogger sets zerolog logger stored in request context.
+func WithContextLogger(logger zerolog.Logger) RuntimeOption {
+	return runtimeOptionFunc(func(cfg *runtimeConfig) {
+		cfg.contextLogger = logger
+		cfg.contextLoggerSet = true
+	})
+}
+
+// WithZerolog stores zerolog logger in request context.
 func WithZerolog(logger zerolog.Logger) RuntimeOption {
-	return WithLogger(zerologBridge(logger))
+	return runtimeOptionFunc(func(cfg *runtimeConfig) {
+		cfg.contextLogger = logger
+		cfg.contextLoggerSet = true
+	})
 }
 
 // NewRuntime builds runtime with sensible defaults.
@@ -86,6 +99,8 @@ func NewRuntime(opts ...RuntimeOption) Runtime {
 		Logger:            cfg.logger,
 		StatusMapper:      cfg.statusMapper,
 		ErrorEncoder:      cfg.errorEncoder,
+		contextLogger:     cfg.contextLogger,
+		contextLoggerSet:  cfg.contextLoggerSet,
 		timeout:           cfg.timeout,
 		requestIDHeader:   cfg.requestIDHeader,
 		logRequests:       cfg.logRequests,

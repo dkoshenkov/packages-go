@@ -34,6 +34,31 @@ func Recovery[Req, Resp any](logger Logger) Middleware[Req, Resp] {
 	}
 }
 
+// RecoveryContext converts panics into internal errors and logs them using the logger stored in context.
+func RecoveryContext[Req, Resp any]() Middleware[Req, Resp] {
+	return func(next Handler[Req, Resp]) Handler[Req, Resp] {
+		return func(ctx context.Context, req Req) (resp Resp, err error) {
+			defer func() {
+				recovered := recover()
+				if recovered == nil {
+					return
+				}
+
+				panicErr := fmt.Errorf("%w: %v", errRecoveredPanic, recovered)
+				logContextEvent(ctx, Event{
+					Level:   "error",
+					Name:    "recovery",
+					Message: "panic recovered",
+					Err:     panicErr,
+				})
+				err = Internal(panicErr)
+			}()
+
+			return next(ctx, req)
+		}
+	}
+}
+
 // Timeout cancels handler context after duration and maps deadline errors.
 func Timeout[Req, Resp any](duration time.Duration) Middleware[Req, Resp] {
 	return func(next Handler[Req, Resp]) Handler[Req, Resp] {
