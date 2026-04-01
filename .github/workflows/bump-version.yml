@@ -1,9 +1,9 @@
 name: Bump Version
 
 on:
-  push:
-    branches:
-      - main
+  pull_request_target:
+    types:
+      - closed
 
 permissions:
   contents: write
@@ -14,13 +14,14 @@ concurrency:
 
 jobs:
   bump-version:
-    name: Create next patch tag
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Configure git
@@ -28,18 +29,38 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Create next version tag
+      - name: Decide bump type
+        id: bump
         shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
 
-          git fetch --tags --force
+          shopt -s nocasematch
 
-          current_tag="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
-          if [[ -n "${current_tag}" ]]; then
-            echo "Current commit already has version tag ${current_tag}"
-            exit 0
+          bump="minor"
+
+          if [[ "${HEAD_REF}" == fixture/* ]]; then
+            bump="patch"
+          elif [[ "${PR_TITLE}" =~ (^|[^[:alpha:]])fix(ed)?([^[:alpha:]]|$) ]]; then
+            bump="patch"
           fi
+
+          echo "bump=${bump}" >> "$GITHUB_OUTPUT"
+          echo "PR title: ${PR_TITLE}"
+          echo "Head ref: ${HEAD_REF}"
+          echo "Selected bump: ${bump}"
+
+      - name: Create next version tag
+        shell: bash
+        env:
+          BUMP_TYPE: ${{ steps.bump.outputs.bump }}
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force origin
 
           latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
           if [[ -z "${latest_tag}" ]]; then
@@ -48,7 +69,27 @@ jobs:
 
           version="${latest_tag#v}"
           IFS='.' read -r major minor patch <<< "${version}"
-          next_tag="v${major}.${minor}.$((patch + 1))"
+
+          case "${BUMP_TYPE}" in
+            patch)
+              patch=$((patch + 1))
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            *)
+              echo "Unknown bump type: ${BUMP_TYPE}"
+              exit 1
+              ;;
+          esac
+
+          next_tag="v${major}.${minor}.${patch}"
+
+          if git rev-parse -q --verify "refs/tags/${next_tag}" >/dev/null 2>&1; then
+            echo "Tag ${next_tag} already exists"
+            exit 1
+          fi
 
           echo "Latest tag: ${latest_tag}"
           echo "Next tag: ${next_tag}"
