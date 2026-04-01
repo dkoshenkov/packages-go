@@ -96,6 +96,28 @@ func TestBindFlagsUsesDefaultValues(t *testing.T) {
 	}
 }
 
+func TestBindFlagsAllowsOptionalNestedStruct(t *testing.T) {
+	type redisCfg struct {
+		Addr string `cfgx:"addr,optional"`
+		TTL  string `cfgx:"ttl,optional"`
+	}
+	type cfg struct {
+		Redis redisCfg `cfgx:"redis,optional"`
+	}
+
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	if err := BindFlags(flags, &cfg{}); err != nil {
+		t.Fatalf("bind flags: %v", err)
+	}
+
+	if flags.Lookup("redis-addr") == nil {
+		t.Fatal("redis-addr flag not found")
+	}
+	if flags.Lookup("redis-ttl") == nil {
+		t.Fatal("redis-ttl flag not found")
+	}
+}
+
 func TestLoadWithParseFlagsOption(t *testing.T) {
 	type cfg struct {
 		Port  int  `cfgx:"port"`

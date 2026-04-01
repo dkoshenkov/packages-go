@@ -28,7 +28,7 @@ type tagSpec struct {
 	defaultRaw string
 }
 
-func collectFields(value reflect.Value, typ reflect.Type, keyPath []string, structPath []string) ([]fieldSpec, []error) {
+func collectFields(value reflect.Value, typ reflect.Type, keyPath []string, structPath []string, ancestorOptional bool) ([]fieldSpec, []error) {
 	var (
 		fields []fieldSpec
 		errs   []error
@@ -57,6 +57,7 @@ func collectFields(value reflect.Value, typ reflect.Type, keyPath []string, stru
 		nextKeyPath := appendPath(keyPath, spec.name)
 		nextStructPath := appendPath(structPath, fieldType.Name)
 		path := strings.Join(nextStructPath, ".")
+		required := spec.required && !ancestorOptional
 
 		fieldValue := value.Field(i)
 		nestedValue, nestedType, nested := nestedStructValue(fieldValue, fieldType.Type)
@@ -65,12 +66,8 @@ func collectFields(value reflect.Value, typ reflect.Type, keyPath []string, stru
 				errs = append(errs, fmt.Errorf("%s: default is not supported on nested struct field", path))
 				continue
 			}
-			if !spec.required {
-				errs = append(errs, fmt.Errorf("%s: optional is not supported on nested struct field", path))
-				continue
-			}
 
-			nestedFields, nestedErrs := collectFields(nestedValue, nestedType, nextKeyPath, nextStructPath)
+			nestedFields, nestedErrs := collectFields(nestedValue, nestedType, nextKeyPath, nextStructPath, ancestorOptional || !spec.required)
 			fields = append(fields, nestedFields...)
 			errs = append(errs, nestedErrs...)
 			continue
@@ -95,7 +92,7 @@ func collectFields(value reflect.Value, typ reflect.Type, keyPath []string, stru
 			path:       path,
 			value:      fieldValue,
 			typ:        fieldType.Type,
-			required:   spec.required,
+			required:   required,
 			hasDefault: spec.hasDefault,
 			defaultRaw: spec.defaultRaw,
 			envKey:     envKey,
