@@ -4,7 +4,8 @@
 // is the first one returned by Pop or Peek.
 package stack
 
-// Interface stack describes a generic LIFO stack behavior.
+// Interface describes the LIFO operations supported by a stack.
+// Use it when code needs stack behavior without depending on the concrete Stack type.
 //
 // Pop and Peek are total functions: they never panic due to an empty stack.
 // If the stack is empty, they return the zero value of T and ok=false.

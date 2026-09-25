@@ -13,14 +13,11 @@ import (
 )
 
 type seedEntry struct {
-	fieldPath    string
 	envKey       string
 	yamlKey      string
 	stringValue  string
 	yamlValue    any
 	vaultValue   any
-	hasDefault   bool
-	defaultParse error
 }
 
 func maybeSeedDefaults(ctx context.Context, rt *runtime, fields []fieldSpec) error {
@@ -108,13 +105,11 @@ func buildSeedEntries(rt *runtime, fields []fieldSpec) ([]seedEntry, error) {
 
 	for _, field := range fields {
 		entry := seedEntry{
-			fieldPath:   field.path,
 			envKey:      rt.profileEnvPrefix + field.envKey,
 			yamlKey:     rt.profileYAMLPrefix + field.yamlKey,
 			stringValue: "",
 			yamlValue:   nil,
 			vaultValue:  nil,
-			hasDefault:  field.hasDefault,
 		}
 
 		if field.hasDefault {

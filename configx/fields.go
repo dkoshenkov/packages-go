@@ -113,7 +113,7 @@ func assignResolvedValue(field fieldSpec, resolved resolvedValue) error {
 		return nil
 	}
 
-	decoded, err := decodeYAMLValue(resolved.any, field.typ)
+	decoded, err := decodeYAMLValue(resolved.yamlValue, field.typ)
 	if err != nil {
 		return fmt.Errorf("%s: decode value from %s (%s): %w", field.path, resolved.source, resolved.key, err)
 	}

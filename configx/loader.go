@@ -25,7 +25,7 @@ type resolvedValue struct {
 	source string
 	key    string
 	raw    *string
-	any    any
+	yamlValue any
 }
 
 // Load fills target using source priority: flag > vault > env > yaml.
@@ -191,9 +191,7 @@ func maybeParseFlags(target any, cfg *config) error {
 		cfg.flagSet = flagSet
 	}
 
-	if err := bindSystemFlags(flagSet, cfg); err != nil {
-		return fmt.Errorf("bind system flags: %w", err)
-	}
+	bindSystemFlags(flagSet, cfg)
 
 	if err := BindFlags(flagSet, target); err != nil {
 		return fmt.Errorf("bind flags: %w", err)
@@ -384,7 +382,7 @@ func lookupGroupValue(ctx context.Context, rt *runtime, field fieldSpec, profile
 		return resolvedValue{
 			source: sourceYAML,
 			key:    yamlKey,
-			any:    rt.yaml.Get(yamlKey),
+			yamlValue: rt.yaml.Get(yamlKey),
 		}, true, nil
 	}
 

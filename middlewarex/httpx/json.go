@@ -280,34 +280,31 @@ func JSON[Req, Resp any](handler middlewarex.Handler[Req, Response[Resp]], opts 
 		writer := &trackingResponseWriter{ResponseWriter: w}
 		r = runtime.prepareRequest(writer, r)
 		startedAt := time.Now()
+		handleError := func(err error, onlyIfUnwritten bool) {
+			if runtime.logRequests {
+				logRequestFinish(runtime.Logger, r, startedAt, cfg.statusMapper.Status(err), err)
+			}
+			if !onlyIfUnwritten || !writer.Written() {
+				WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
+			}
+		}
 		if runtime.logRequests {
 			logRequestStart(runtime.Logger, r)
 		}
 
 		req, err := cfg.decoder(r)
 		if err != nil {
-			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, r, startedAt, cfg.statusMapper.Status(err), err)
-			}
-			WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
+			handleError(err, false)
 			return
 		}
 
 		resp, err := wrapped(r.Context(), req)
 		if err != nil {
-			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, r, startedAt, cfg.statusMapper.Status(err), err)
-			}
-			WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
+			handleError(err, false)
 			return
 		}
 		if err := cfg.encoder(writer, r, resp); err != nil {
-			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, r, startedAt, cfg.statusMapper.Status(err), err)
-			}
-			if !writer.Written() {
-				WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
-			}
+			handleError(err, true)
 			return
 		}
 		if runtime.logRequests {
