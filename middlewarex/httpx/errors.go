@@ -16,4 +16,6 @@ const (
 	errCSRFOriginInvalid     = consterr.Error("origin is not trusted")
 	errCSRFFetchSiteInvalid  = consterr.Error("fetch metadata indicates a cross-site request")
 	errRequestIDGeneratorNil = consterr.Error("request ID generator must not be nil")
+	errJSONBodyMustBeObject  = consterr.Error("request body must contain a JSON object")
+	errJSONSingleValue       = consterr.Error("request body must contain a single JSON value")
 )

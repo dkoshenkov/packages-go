@@ -156,7 +156,7 @@ func decodeJSON[Req any](r *http.Request, opts DecodeOptions) (Req, error) {
 			return req, classifyJSONReadError(err)
 		}
 		if first != '{' {
-			return req, middlewarex.BadRequest(errors.New("request body must contain a JSON object"))
+			return req, middlewarex.BadRequest(errJSONBodyMustBeObject)
 		}
 	}
 
@@ -169,7 +169,7 @@ func decodeJSON[Req any](r *http.Request, opts DecodeOptions) (Req, error) {
 	}
 	if err := decoder.Decode(new(struct{})); err != io.EOF {
 		if err == nil {
-			return req, middlewarex.BadRequest(errors.New("request body must contain a single JSON value"))
+			return req, middlewarex.BadRequest(errJSONSingleValue)
 		}
 		return req, classifyJSONReadError(err)
 	}
