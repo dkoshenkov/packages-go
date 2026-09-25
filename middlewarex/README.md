@@ -81,6 +81,8 @@ type Exchange struct {
 HTTP-specific middleware:
 
 - `Auth`
+- `LimitBody`
+- `CSRF`
 - `RequireHeader`
 - `RequireMethod`
 - `RequestID`
@@ -91,6 +93,27 @@ HTTP-specific middleware:
 - `Adapt`
 - `Wrap`
 - `WrapFunc`
+
+`LimitBody(maxBytes)` installs `http.MaxBytesReader` before the body consumer;
+oversized JSON requests retain a classified error and map to HTTP 413.
+`JSONDecoder[T](DecodeOptions{...})` can require a top-level object, allow an
+empty body, and reject unknown fields. The legacy `DecodeJSON[T]` keeps its
+existing empty-body and unknown-field behavior.
+
+`JSONErrorEncoder(mapper, messagesByStatus)` writes `{ "error": "..." }` and
+uses only configured public messages or safe generic/status text. Use the same
+mapper and encoder with `JSON(...)` options and `Adapt(...)` for errors raised
+before decoding.
+
+`Auth` remains Bearer-only by default. To enable cookie credentials, configure
+`WithAuthCookie("session")` and an explicit `WithAuthPriority(...)`; the first
+present source is verified without fallback, and `AuthSourceFromContext` tells
+later middleware which verified source was used.
+
+`CSRF(CSRFConfig{...})` checks unsafe methods against request/trusted origins
+and optionally Fetch Metadata. The application provides trusted origins,
+missing-Origin policy, exemptions, and whether a verified Bearer source bypasses
+the check. Place `CSRF` after `Auth` when using that option.
 
 ## HTTP Example
 
@@ -159,6 +182,7 @@ func main() {
 - `Unauthorized(err)`
 - `Forbidden(err)`
 - `BadRequest(err)`
+- `PayloadTooLarge(err)`
 - `MethodNotAllowed(err)`
 - `TimeoutError(err)`
 - `Internal(err)`
@@ -168,6 +192,7 @@ func main() {
 - `IsUnauthorized(err)`
 - `IsForbidden(err)`
 - `IsBadRequest(err)`
+- `IsPayloadTooLarge(err)`
 - `IsMethodNotAllowed(err)`
 - `IsTimeout(err)`
 - `IsInternal(err)`

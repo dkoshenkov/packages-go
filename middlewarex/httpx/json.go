@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,8 +18,10 @@ import (
 
 // Response describes typed HTTP response envelope.
 type Response[T any] struct {
-	Status int
-	Body   *T
+	Status  int
+	Body    *T
+	Headers http.Header
+	Cookies []*http.Cookie
 }
 
 // OK returns 200 response with JSON body.
@@ -117,34 +121,110 @@ func WithRuntime[Req, Resp any](runtime Runtime) Option[Req, Resp] {
 
 // DecodeJSON decodes JSON body into request value.
 func DecodeJSON[Req any](r *http.Request) (Req, error) {
+	return decodeJSON[Req](r, DecodeOptions{AllowEmptyBody: true})
+}
+
+// DecodeOptions configures JSON request decoding. The zero value rejects an
+// empty body and otherwise retains encoding/json's default field handling.
+type DecodeOptions struct {
+	RequireObject         bool
+	AllowEmptyBody        bool
+	DisallowUnknownFields bool
+}
+
+// JSONDecoder returns a request decoder configured with options. DecodeJSON
+// remains unchanged for callers that need its legacy empty-body behavior.
+func JSONDecoder[Req any](opts DecodeOptions) DecodeFunc[Req] {
+	return func(r *http.Request) (Req, error) {
+		return decodeJSON[Req](r, opts)
+	}
+}
+
+func decodeJSON[Req any](r *http.Request, opts DecodeOptions) (Req, error) {
 	var req Req
 	if r == nil || r.Body == nil || r.Body == http.NoBody || r.ContentLength == 0 {
-		return req, nil
+		if opts.AllowEmptyBody {
+			return req, nil
+		}
+		return req, middlewarex.BadRequest(io.EOF)
 	}
 
-	decoder := json.NewDecoder(r.Body)
+	body := bufio.NewReader(r.Body)
+	if opts.RequireObject {
+		first, err := firstJSONByte(body)
+		if errors.Is(err, io.EOF) {
+			return req, middlewarex.BadRequest(err)
+		}
+		if err != nil {
+			return req, classifyJSONReadError(err)
+		}
+		if first != '{' {
+			return req, middlewarex.BadRequest(errJSONBodyMustBeObject)
+		}
+	}
+
+	decoder := json.NewDecoder(body)
+	if opts.DisallowUnknownFields {
+		decoder.DisallowUnknownFields()
+	}
 	if err := decoder.Decode(&req); err != nil {
-		return req, middlewarex.BadRequest(err)
+		return req, classifyJSONReadError(err)
 	}
 	if err := decoder.Decode(new(struct{})); err != io.EOF {
 		if err == nil {
-			return req, middlewarex.BadRequest(errors.New("request body must contain a single JSON value"))
+			return req, middlewarex.BadRequest(errJSONSingleValue)
 		}
-		return req, middlewarex.BadRequest(err)
+		return req, classifyJSONReadError(err)
 	}
 
 	return req, nil
 }
 
+func firstJSONByte(body *bufio.Reader) (byte, error) {
+	for {
+		b, err := body.ReadByte()
+		if err != nil {
+			return 0, err
+		}
+		if b == ' ' || b == '\t' || b == '\r' || b == '\n' {
+			continue
+		}
+		if err := body.UnreadByte(); err != nil {
+			return 0, err
+		}
+		return b, nil
+	}
+}
+
+func classifyJSONReadError(err error) error {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		return middlewarex.PayloadTooLarge(err)
+	}
+	return middlewarex.BadRequest(err)
+}
+
 // EncodeJSON encodes typed response as JSON.
 func EncodeJSON[T any](w http.ResponseWriter, _ *http.Request, resp Response[T]) error {
 	status := responseStatus(resp.Status, resp.Body)
+	for name, values := range resp.Headers {
+		for _, value := range values {
+			w.Header().Add(name, value)
+		}
+	}
+	for _, cookie := range resp.Cookies {
+		if cookie != nil {
+			http.SetCookie(w, cookie)
+		}
+	}
 	if resp.Body == nil {
 		w.WriteHeader(status)
 		return nil
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	}
 	w.WriteHeader(status)
 	return json.NewEncoder(w).Encode(resp.Body)
 }
@@ -200,38 +280,35 @@ func JSON[Req, Resp any](handler middlewarex.Handler[Req, Response[Resp]], opts 
 		writer := &trackingResponseWriter{ResponseWriter: w}
 		r = runtime.prepareRequest(writer, r)
 		startedAt := time.Now()
+		handleError := func(err error, onlyIfUnwritten bool) {
+			if runtime.logRequests {
+				logRequestFinish(runtime.Logger, r, startedAt, cfg.statusMapper.Status(err), err)
+			}
+			if !onlyIfUnwritten || !writer.Written() {
+				WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
+			}
+		}
 		if runtime.logRequests {
-			logRequestStart(runtime.Logger, runtime.contextLoggerSet, r)
+			logRequestStart(runtime.Logger, r)
 		}
 
 		req, err := cfg.decoder(r)
 		if err != nil {
-			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, runtime.contextLoggerSet, r, startedAt, cfg.statusMapper.Status(err), err)
-			}
-			WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
+			handleError(err, false)
 			return
 		}
 
 		resp, err := wrapped(r.Context(), req)
 		if err != nil {
-			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, runtime.contextLoggerSet, r, startedAt, cfg.statusMapper.Status(err), err)
-			}
-			WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
+			handleError(err, false)
 			return
 		}
 		if err := cfg.encoder(writer, r, resp); err != nil {
-			if runtime.logRequests {
-				logRequestFinish(runtime.Logger, runtime.contextLoggerSet, r, startedAt, cfg.statusMapper.Status(err), err)
-			}
-			if !writer.Written() {
-				WriteError(writer, r, err, statusMapperOption{statusMapper: cfg.statusMapper}, errorEncoderOption{errorEncoder: cfg.errorEncoder})
-			}
+			handleError(err, true)
 			return
 		}
 		if runtime.logRequests {
-			logRequestFinish(runtime.Logger, runtime.contextLoggerSet, r, startedAt, responseStatus(resp.Status, resp.Body), nil)
+			logRequestFinish(runtime.Logger, r, startedAt, responseStatus(resp.Status, resp.Body), nil)
 		}
 	})
 }
@@ -266,6 +343,14 @@ func (w *trackingResponseWriter) Written() bool {
 		return false
 	}
 	return w.written
+}
+
+// Unwrap exposes the underlying writer to http.ResponseController.
+func (w *trackingResponseWriter) Unwrap() http.ResponseWriter {
+	if w == nil {
+		return nil
+	}
+	return w.ResponseWriter
 }
 
 func runtimeOrDefault(runtime *Runtime) Runtime {
@@ -324,33 +409,28 @@ func runtimeMiddlewares[Req, Resp any](rt Runtime) []middlewarex.Middleware[Req,
 	return result
 }
 
-func logRequestStart(logger middlewarex.Logger, useContextLogger bool, r *http.Request) {
-	if r == nil || (!useContextLogger && logger == nil) {
+func logRequestStart(logger middlewarex.Logger, r *http.Request) {
+	if r == nil || (logger == nil && zerolog.Ctx(r.Context()) == nil) {
 		return
 	}
-
+	event := middlewarex.Event{
+		Level:   "info",
+		Name:    "http",
+		Message: "request started",
+		Fields: map[string]any{
+			"method": r.Method,
+			"path":   r.URL.Path,
+		},
+	}
 	if logger != nil {
-		logger.Log(r.Context(), middlewarex.Event{
-			Level:   "info",
-			Name:    "http",
-			Message: "request started",
-			Fields: map[string]any{
-				"method": r.Method,
-				"path":   r.URL.Path,
-			},
-		})
+		logger.Log(r.Context(), event)
 		return
 	}
-
-	logx.Log(r.Context(), zerolog.InfoLevel).
-		Str("name", "http").
-		Str("method", r.Method).
-		Str("path", r.URL.Path).
-		Msg("request started")
+	logContextEvent(r.Context(), event)
 }
 
-func logRequestFinish(logger middlewarex.Logger, useContextLogger bool, r *http.Request, startedAt time.Time, status int, err error) {
-	if r == nil || (!useContextLogger && logger == nil) {
+func logRequestFinish(logger middlewarex.Logger, r *http.Request, startedAt time.Time, status int, err error) {
+	if r == nil || (logger == nil && zerolog.Ctx(r.Context()) == nil) {
 		return
 	}
 
@@ -358,34 +438,67 @@ func logRequestFinish(logger middlewarex.Logger, useContextLogger bool, r *http.
 	if err != nil {
 		level = "error"
 	}
+	event := middlewarex.Event{
+		Level:    level,
+		Name:     "http",
+		Message:  "request finished",
+		Duration: time.Since(startedAt),
+		Err:      err,
+		Fields: map[string]any{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"status": status,
+		},
+	}
 	if logger != nil {
-		logger.Log(r.Context(), middlewarex.Event{
-			Level:    level,
-			Name:     "http",
-			Message:  "request finished",
-			Duration: time.Since(startedAt),
-			Err:      err,
-			Fields: map[string]any{
-				"method": r.Method,
-				"path":   r.URL.Path,
-				"status": status,
-			},
-		})
+		logger.Log(r.Context(), event)
 		return
 	}
+	logContextEvent(r.Context(), event)
+}
 
-	entry := logx.Log(r.Context(), zerolog.InfoLevel)
-	if err != nil {
-		entry = logx.Log(r.Context(), zerolog.ErrorLevel)
+func logContextEvent(ctx context.Context, event middlewarex.Event) {
+	logger := zerolog.Ctx(ctx)
+	if logger == nil {
+		return
 	}
-	entry.
-		Str("name", "http").
-		Str("method", r.Method).
-		Str("path", r.URL.Path).
-		Int("status", status).
-		Dur("duration", time.Since(startedAt))
-	if err != nil {
-		entry.Err(err)
+	entry := logger.WithLevel(parseLogLevel(event.Level)).
+		Str("name", event.Name).
+		Dur("duration", event.Duration)
+	if event.RequestID != "" {
+		entry = entry.Str("request_id", event.RequestID)
+	} else if requestID, ok := middlewarex.RequestIDFromContext(ctx); ok && requestID != "" {
+		entry = entry.Str("request_id", requestID)
 	}
-	entry.Msg("request finished")
+	if event.Subject != "" {
+		entry = entry.Str("subject", event.Subject)
+	} else if identity, ok := middlewarex.IdentityFromContext(ctx); ok && identity.Subject != "" {
+		entry = entry.Str("subject", identity.Subject)
+	}
+	for key, value := range event.Fields {
+		entry = entry.Interface(key, value)
+	}
+	if event.Err != nil {
+		entry = entry.Err(event.Err)
+	}
+	entry.Msg(event.Message)
+}
+
+func parseLogLevel(level string) zerolog.Level {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "trace":
+		return zerolog.TraceLevel
+	case "debug":
+		return zerolog.DebugLevel
+	case "warn", "warning":
+		return zerolog.WarnLevel
+	case "error":
+		return zerolog.ErrorLevel
+	case "fatal":
+		return zerolog.FatalLevel
+	case "panic":
+		return zerolog.PanicLevel
+	default:
+		return zerolog.InfoLevel
+	}
 }

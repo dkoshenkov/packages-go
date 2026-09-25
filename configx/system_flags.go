@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-func bindSystemFlags(flagSet *pflag.FlagSet, cfg *config) error {
+func bindSystemFlags(flagSet *pflag.FlagSet, cfg *config) {
 	if flagSet.Lookup(flagSeedDefaults) == nil {
 		flagSet.Bool(flagSeedDefaults, cfg.seedDefaults, "")
 	}
@@ -40,7 +40,6 @@ func bindSystemFlags(flagSet *pflag.FlagSet, cfg *config) error {
 		flagSet.String(flagVaultPath, currentVaultPath(cfg), "")
 	}
 
-	return nil
 }
 
 func applySystemFlags(flagSet *pflag.FlagSet, cfg *config) error {

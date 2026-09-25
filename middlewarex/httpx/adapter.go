@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -137,6 +138,8 @@ func DefaultStatusMapper(err error) int {
 		return http.StatusForbidden
 	case middlewarex.IsBadRequest(err):
 		return http.StatusBadRequest
+	case middlewarex.IsPayloadTooLarge(err):
+		return http.StatusRequestEntityTooLarge
 	case middlewarex.IsMethodNotAllowed(err):
 		return http.StatusMethodNotAllowed
 	case middlewarex.IsTimeout(err):
@@ -144,6 +147,39 @@ func DefaultStatusMapper(err error) int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+// JSONErrorEncoder returns an encoder for the safe {"error":"..."} format.
+// Messages are selected by HTTP status code. Unmapped server errors use a
+// generic message and never expose err.Error().
+func JSONErrorEncoder(statusMapper StatusMapper, messages map[int]string) ErrorEncoder {
+	if statusMapper == nil {
+		statusMapper = StatusMapperFunc(DefaultStatusMapper)
+	}
+	publicMessages := make(map[int]string, len(messages))
+	for status, message := range messages {
+		publicMessages[status] = message
+	}
+
+	return ErrorEncoderFunc(func(w http.ResponseWriter, _ *http.Request, err error) {
+		status := statusMapper.Status(err)
+		message, ok := publicMessages[status]
+		if !ok || message == "" {
+			if status >= http.StatusInternalServerError {
+				message = "internal server error"
+			} else if text := http.StatusText(status); text != "" {
+				message = text
+			} else {
+				message = "request failed"
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(struct {
+			Error string `json:"error"`
+		}{Error: message})
+	})
 }
 
 // DefaultErrorEncoder writes status text body.
@@ -197,9 +233,10 @@ func Adapt(handler Handler, opts ...AdaptOption) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, err := handler(r.Context(), Exchange{Writer: w, Request: r})
-		if err != nil {
-			cfg.errorEncoder.Encode(w, r, err)
+		writer := &trackingResponseWriter{ResponseWriter: w}
+		_, err := handler(r.Context(), Exchange{Writer: writer, Request: r})
+		if err != nil && !writer.Written() {
+			cfg.errorEncoder.Encode(writer, r, err)
 		}
 	})
 }

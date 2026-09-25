@@ -20,21 +20,23 @@ const (
 type ErrorKind string
 
 const (
-	ErrorKindUnauthorized   ErrorKind = "unauthorized"
-	ErrorKindForbidden      ErrorKind = "forbidden"
-	ErrorKindBadRequest     ErrorKind = "bad_request"
-	ErrorKindMethodNotAllow ErrorKind = "method_not_allowed"
-	ErrorKindTimeout        ErrorKind = "timeout"
-	ErrorKindInternal       ErrorKind = "internal"
+	ErrorKindUnauthorized    ErrorKind = "unauthorized"
+	ErrorKindForbidden       ErrorKind = "forbidden"
+	ErrorKindBadRequest      ErrorKind = "bad_request"
+	ErrorKindPayloadTooLarge ErrorKind = "payload_too_large"
+	ErrorKindMethodNotAllow  ErrorKind = "method_not_allowed"
+	ErrorKindTimeout         ErrorKind = "timeout"
+	ErrorKindInternal        ErrorKind = "internal"
 )
 
 var (
-	errUnauthorized   = &Error{kind: ErrorKindUnauthorized}
-	errForbidden      = &Error{kind: ErrorKindForbidden}
-	errBadRequest     = &Error{kind: ErrorKindBadRequest}
-	errMethodNotAllow = &Error{kind: ErrorKindMethodNotAllow}
-	errTimeout        = &Error{kind: ErrorKindTimeout}
-	errInternal       = &Error{kind: ErrorKindInternal}
+	errUnauthorized    = &Error{kind: ErrorKindUnauthorized}
+	errForbidden       = &Error{kind: ErrorKindForbidden}
+	errBadRequest      = &Error{kind: ErrorKindBadRequest}
+	errPayloadTooLarge = &Error{kind: ErrorKindPayloadTooLarge}
+	errMethodNotAllow  = &Error{kind: ErrorKindMethodNotAllow}
+	errTimeout         = &Error{kind: ErrorKindTimeout}
+	errInternal        = &Error{kind: ErrorKindInternal}
 )
 
 // Error classifies middleware failure.
@@ -103,6 +105,11 @@ func BadRequest(err error) error {
 	return classify(errBadRequest, err)
 }
 
+// PayloadTooLarge classifies err as a request body that exceeds its limit.
+func PayloadTooLarge(err error) error {
+	return classify(errPayloadTooLarge, err)
+}
+
 // MethodNotAllowed classifies err as method not allowed.
 func MethodNotAllowed(err error) error {
 	return classify(errMethodNotAllow, err)
@@ -131,6 +138,11 @@ func IsForbidden(err error) bool {
 // IsBadRequest reports whether err is bad request.
 func IsBadRequest(err error) bool {
 	return errors.Is(err, errBadRequest)
+}
+
+// IsPayloadTooLarge reports whether err is a request body size violation.
+func IsPayloadTooLarge(err error) bool {
+	return errors.Is(err, errPayloadTooLarge)
 }
 
 // IsMethodNotAllowed reports whether err is method not allowed.
