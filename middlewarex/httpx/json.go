@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dkoshenkov/packages-go/logx"
 	"github.com/dkoshenkov/packages-go/middlewarex"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 // Response describes typed HTTP response envelope.
@@ -390,12 +393,19 @@ func (rt Runtime) prepareRequest(w http.ResponseWriter, r *http.Request) *http.R
 
 	w.Header().Set(headerName, requestID)
 	ctx := middlewarex.WithRequestID(r.Context(), requestID)
+	if rt.contextLoggerSet {
+		ctx = logx.WithContext(ctx, rt.contextLogger)
+	}
 	return r.WithContext(ctx)
 }
 
 func runtimeMiddlewares[Req, Resp any](rt Runtime) []middlewarex.Middleware[Req, Response[Resp]] {
 	var result []middlewarex.Middleware[Req, Response[Resp]]
-	result = append(result, middlewarex.Recovery[Req, Response[Resp]](rt.Logger))
+	if rt.Logger != nil {
+		result = append(result, middlewarex.Recovery[Req, Response[Resp]](rt.Logger))
+	} else if rt.contextLoggerSet {
+		result = append(result, middlewarex.RecoveryContext[Req, Response[Resp]]())
+	}
 	if rt.timeout > 0 {
 		result = append(result, middlewarex.Timeout[Req, Response[Resp]](rt.timeout))
 	}
@@ -403,11 +413,10 @@ func runtimeMiddlewares[Req, Resp any](rt Runtime) []middlewarex.Middleware[Req,
 }
 
 func logRequestStart(logger middlewarex.Logger, r *http.Request) {
-	if logger == nil || r == nil {
+	if r == nil || (logger == nil && zerolog.Ctx(r.Context()) == nil) {
 		return
 	}
-
-	logger.Log(r.Context(), middlewarex.Event{
+	event := middlewarex.Event{
 		Level:   "info",
 		Name:    "http",
 		Message: "request started",
@@ -415,11 +424,16 @@ func logRequestStart(logger middlewarex.Logger, r *http.Request) {
 			"method": r.Method,
 			"path":   r.URL.Path,
 		},
-	})
+	}
+	if logger != nil {
+		logger.Log(r.Context(), event)
+		return
+	}
+	logContextEvent(r.Context(), event)
 }
 
 func logRequestFinish(logger middlewarex.Logger, r *http.Request, startedAt time.Time, status int, err error) {
-	if logger == nil || r == nil {
+	if r == nil || (logger == nil && zerolog.Ctx(r.Context()) == nil) {
 		return
 	}
 
@@ -427,7 +441,7 @@ func logRequestFinish(logger middlewarex.Logger, r *http.Request, startedAt time
 	if err != nil {
 		level = "error"
 	}
-	logger.Log(r.Context(), middlewarex.Event{
+	event := middlewarex.Event{
 		Level:    level,
 		Name:     "http",
 		Message:  "request finished",
@@ -438,5 +452,56 @@ func logRequestFinish(logger middlewarex.Logger, r *http.Request, startedAt time
 			"path":   r.URL.Path,
 			"status": status,
 		},
-	})
+	}
+	if logger != nil {
+		logger.Log(r.Context(), event)
+		return
+	}
+	logContextEvent(r.Context(), event)
+}
+
+func logContextEvent(ctx context.Context, event middlewarex.Event) {
+	logger := zerolog.Ctx(ctx)
+	if logger == nil {
+		return
+	}
+	entry := logger.WithLevel(parseLogLevel(event.Level)).
+		Str("name", event.Name).
+		Dur("duration", event.Duration)
+	if event.RequestID != "" {
+		entry = entry.Str("request_id", event.RequestID)
+	} else if requestID, ok := middlewarex.RequestIDFromContext(ctx); ok && requestID != "" {
+		entry = entry.Str("request_id", requestID)
+	}
+	if event.Subject != "" {
+		entry = entry.Str("subject", event.Subject)
+	} else if identity, ok := middlewarex.IdentityFromContext(ctx); ok && identity.Subject != "" {
+		entry = entry.Str("subject", identity.Subject)
+	}
+	for key, value := range event.Fields {
+		entry = entry.Interface(key, value)
+	}
+	if event.Err != nil {
+		entry = entry.Err(event.Err)
+	}
+	entry.Msg(event.Message)
+}
+
+func parseLogLevel(level string) zerolog.Level {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "trace":
+		return zerolog.TraceLevel
+	case "debug":
+		return zerolog.DebugLevel
+	case "warn", "warning":
+		return zerolog.WarnLevel
+	case "error":
+		return zerolog.ErrorLevel
+	case "fatal":
+		return zerolog.FatalLevel
+	case "panic":
+		return zerolog.PanicLevel
+	default:
+		return zerolog.InfoLevel
+	}
 }
