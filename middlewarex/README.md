@@ -105,6 +105,9 @@ uses only configured public messages or safe generic/status text. Use the same
 mapper and encoder with `JSON(...)` options and `Adapt(...)` for errors raised
 before decoding.
 
+The supported Flux/PaaS composition and integration responsibilities are
+documented in [the PaaS HTTP runtime profile](../docs/paas-runtime-profile.md).
+
 `Auth` remains Bearer-only by default. To enable cookie credentials, configure
 `WithAuthCookie("session")` and an explicit `WithAuthPriority(...)`; the first
 present source is verified without fallback, and `AuthSourceFromContext` tells

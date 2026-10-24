@@ -21,7 +21,7 @@ type decodeRequest struct {
 type customJSONValue struct{ Called bool }
 
 func (v *customJSONValue) UnmarshalJSON(data []byte) error {
-	v.Called = string(data) == `{"value":1}`
+	v.Called = true
 	return nil
 }
 
@@ -66,6 +66,57 @@ func TestJSONDecoderOptions(t *testing.T) {
 	if !custom.Called {
 		t.Fatal("custom UnmarshalJSON was not called")
 	}
+}
+
+func TestJSONDecoderReadsBodyWhenContentLengthIsZero(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"value":1}`))
+	r.ContentLength = 0
+
+	got, err := JSONDecoder[decodeRequest](DecodeOptions{AllowEmptyBody: true, RequireObject: true})(r)
+	if err != nil || got.Value != 1 {
+		t.Fatalf("decoded=%+v error=%v", got, err)
+	}
+}
+
+func TestJSONDecoderEmptyStreamOptions(t *testing.T) {
+	tests := []struct {
+		name          string
+		body          string
+		allowEmpty    bool
+		requireObject bool
+		wantErr       bool
+	}{
+		{name: "empty allowed", allowEmpty: true},
+		{name: "empty rejected", wantErr: true},
+		{name: "empty object required and allowed", allowEmpty: true, requireObject: true},
+		{name: "empty object required and rejected", requireObject: true, wantErr: true},
+		{name: "whitespace is not empty", body: " \n", allowEmpty: true, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
+			r.ContentLength = -1
+			got, err := JSONDecoder[decodeRequest](DecodeOptions{
+				AllowEmptyBody: tt.allowEmpty,
+				RequireObject:  tt.requireObject,
+			})(r)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("value=%+v error=%v, wantErr=%v", got, err, tt.wantErr)
+			}
+			if err == nil && got != (decodeRequest{}) {
+				t.Fatalf("empty body decoded as %+v", got)
+			}
+		})
+	}
+
+	t.Run("custom UnmarshalJSON is not called", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(""))
+		r.ContentLength = -1
+		got, err := JSONDecoder[customJSONValue](DecodeOptions{AllowEmptyBody: true})(r)
+		if err != nil || got.Called {
+			t.Fatalf("value=%+v error=%v", got, err)
+		}
+	})
 }
 
 func TestLimitBodyReturns413OverRealHTTP(t *testing.T) {
