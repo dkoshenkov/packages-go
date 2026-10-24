@@ -22,9 +22,9 @@ type runtime struct {
 }
 
 type resolvedValue struct {
-	source string
-	key    string
-	raw    *string
+	source    string
+	key       string
+	raw       *string
 	yamlValue any
 }
 
@@ -380,8 +380,8 @@ func lookupGroupValue(ctx context.Context, rt *runtime, field fieldSpec, profile
 
 	if rt.yaml != nil && rt.yaml.IsSet(yamlKey) {
 		return resolvedValue{
-			source: sourceYAML,
-			key:    yamlKey,
+			source:    sourceYAML,
+			key:       yamlKey,
 			yamlValue: rt.yaml.Get(yamlKey),
 		}, true, nil
 	}
