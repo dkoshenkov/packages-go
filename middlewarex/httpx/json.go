@@ -142,7 +142,7 @@ func JSONDecoder[Req any](opts DecodeOptions) DecodeFunc[Req] {
 
 func decodeJSON[Req any](r *http.Request, opts DecodeOptions) (Req, error) {
 	var req Req
-	if r == nil || r.Body == nil || r.Body == http.NoBody || r.ContentLength == 0 {
+	if r == nil || r.Body == nil || r.Body == http.NoBody {
 		if opts.AllowEmptyBody {
 			return req, nil
 		}
@@ -150,11 +150,18 @@ func decodeJSON[Req any](r *http.Request, opts DecodeOptions) (Req, error) {
 	}
 
 	body := bufio.NewReader(r.Body)
+	_, err := body.Peek(1)
+	if errors.Is(err, io.EOF) {
+		if opts.AllowEmptyBody {
+			return req, nil
+		}
+		return req, middlewarex.BadRequest(err)
+	}
+	if err != nil {
+		return req, classifyJSONReadError(err)
+	}
 	if opts.RequireObject {
 		first, err := firstJSONByte(body)
-		if errors.Is(err, io.EOF) {
-			return req, middlewarex.BadRequest(err)
-		}
 		if err != nil {
 			return req, classifyJSONReadError(err)
 		}

@@ -13,11 +13,11 @@ import (
 )
 
 type seedEntry struct {
-	envKey       string
-	yamlKey      string
-	stringValue  string
-	yamlValue    any
-	vaultValue   any
+	envKey      string
+	yamlKey     string
+	stringValue string
+	yamlValue   any
+	vaultValue  any
 }
 
 func maybeSeedDefaults(ctx context.Context, rt *runtime, fields []fieldSpec) error {
