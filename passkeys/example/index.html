@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Passkeys — локальный пример</title>
+<style>body{font:18px system-ui;max-width:640px;margin:10vh auto;padding:24px;background:#f8fafc;color:#17243b}button{font:inherit;padding:12px 18px;margin:8px 8px 8px 0;cursor:pointer}#status{white-space:pre-wrap}small{display:block;line-height:1.5}</style>
+<h1>Вход с passkey</h1>
+<p>Создайте аккаунт или войдите существующим ключом. После входа можно добавить ещё один ключ.</p>
+<button id="register">Создать аккаунт / добавить ключ</button>
+<button id="login">Войти</button>
+<p id="status" role="status" aria-live="polite"></p>
+<small>Локальный пример. Данные исчезнут после перезапуска сервера. Добавить ключ можно в течение пяти минут после входа.</small>
+<script>
+const status = document.querySelector('#status');
+const buttons = [...document.querySelectorAll('button')];
+const decode = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+const encode = value => btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function post(path, body) {
+  const response = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body ?? {})});
+  if (!response.ok) throw new Error('Операция не завершена. Начните заново.');
+  return response.json();
+}
+function optionsFromJSON(value, registration) {
+  const result = {...value, challenge:decode(value.challenge)};
+  if (registration) result.user = {...value.user, id:decode(value.user.id)};
+  const field = registration ? 'excludeCredentials' : 'allowCredentials';
+  if (value[field]) result[field] = value[field].map(x => ({...x, id:decode(x.id)}));
+  return result;
+}
+function responseJSON(credential, registration) {
+  const response = {clientDataJSON:encode(credential.response.clientDataJSON)};
+  if (registration) {
+    response.attestationObject = encode(credential.response.attestationObject);
+    response.transports = credential.response.getTransports?.() ?? [];
+  } else {
+    response.authenticatorData = encode(credential.response.authenticatorData);
+    response.signature = encode(credential.response.signature);
+    response.userHandle = credential.response.userHandle === null ? null : encode(credential.response.userHandle);
+  }
+  return {id:credential.id, rawId:encode(credential.rawId), type:credential.type, response, clientExtensionResults:credential.getClientExtensionResults()};
+}
+async function run(registration) {
+  buttons.forEach(b => b.disabled = true);
+  status.textContent = 'Подтвердите действие в системном диалоге.';
+  const path = registration ? '/register' : '/login';
+  try {
+    const options = await post(path + '/begin');
+    const publicKey = optionsFromJSON(options, registration);
+    const credential = registration ? await navigator.credentials.create({publicKey}) : await navigator.credentials.get({publicKey});
+    if (!credential) throw new Error('Операция отменена.');
+    await post(path + '/finish', responseJSON(credential, registration));
+    status.textContent = registration ? 'Ключ сохранён. Вы вошли.' : 'Вы вошли.';
+  } catch (error) {
+    status.textContent = error.name === 'NotAllowedError' ? 'Операция отменена, истекло время или подходящий ключ недоступен.' : error.message;
+  } finally { buttons.forEach(b => b.disabled = false); }
+}
+document.querySelector('#register').onclick = () => run(true);
+document.querySelector('#login').onclick = () => run(false);
+</script>
+</html>

@@ -1,0 +1,29 @@
+{
+  "source": "Generated independently with Python stdlib CBOR encoding and OpenSSL ECDSA; no passkeys code used.",
+  "openssl": "OpenSSL 4.0.3 29 Sep 2026 (Library: OpenSSL 4.0.3 29 Sep 2026)",
+  "challenge": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "userID": "aW5kZXBlbmRlbnQtdXNlcg",
+  "publicKey": "pQECAyYgASFYIH5EEqqBp4tP8Lw9aJTvi26qnyzsIcP2UIzzTiSEfCpcIlgggv9H_AZmhpYwmU-iwof4v4_T16zEnq0--vxhwyjY2gE",
+  "registration": {
+    "id": "aW5kZXBlbmRlbnQtb3BlbnNzbC1jcmVkZW50aWFs",
+    "rawId": "aW5kZXBlbmRlbnQtb3BlbnNzbC1jcmVkZW50aWFs",
+    "type": "public-key",
+    "response": {
+      "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiQUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOCIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5jb20ifQ",
+      "attestationObject": "o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YViio3mm9u6vuaVeN4wRgDTidR5oL6ufLTCrE9ISVYbOGUddAAAAAQAAAAAAAAAAAAAAAAAAAAAAHmluZGVwZW5kZW50LW9wZW5zc2wtY3JlZGVudGlhbKUBAgMmIAEhWCB-RBKqgaeLT_C8PWiU74tuqp8s7CHD9lCM804khHwqXCJYIIL_R_wGZoaWMJlPosKH-L-P09esxJ6tPvr8YcMo2NoB"
+    },
+    "clientExtensionResults": {}
+  },
+  "login": {
+    "id": "aW5kZXBlbmRlbnQtb3BlbnNzbC1jcmVkZW50aWFs",
+    "rawId": "aW5kZXBlbmRlbnQtb3BlbnNzbC1jcmVkZW50aWFs",
+    "type": "public-key",
+    "response": {
+      "clientDataJSON": "ewogICJvcmlnaW4iOiAiaHR0cHM6Ly9leGFtcGxlLmNvbSIsCiAgImNoYWxsZW5nZSI6ICJBQUVDQXdRRkJnY0lDUW9MREEwT0R4QVJFaE1VRlJZWEdCa2FHeHdkSGg4IiwKICAidHlwZSI6ICJ3ZWJhdXRobi5nZXQiLAogICJjcm9zc09yaWdpbiI6IGZhbHNlCn0",
+      "authenticatorData": "o3mm9u6vuaVeN4wRgDTidR5oL6ufLTCrE9ISVYbOGUcdAAAAAg",
+      "signature": "MEUCIAeI_kmvhcAXf1v-dhrq1b903GoX_RJdZvvbuR-80wvrAiEA8CrH9PLaioGn5-FKnqFv_vpMF0sZgnvyxaTTf2SQHAE",
+      "userHandle": "aW5kZXBlbmRlbnQtdXNlcg"
+    },
+    "clientExtensionResults": {}
+  }
+}

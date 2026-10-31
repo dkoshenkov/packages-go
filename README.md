@@ -12,6 +12,7 @@
 - `consterr` — простая строковая ошибка-константа.
 - `stack` — generic LIFO stack и потокобезопасная реализация.
 - `middlewarex` — generic middleware core + `net/http` adapters.
+- `passkeys` — experimental WebAuthn RP: ES256/none, регистрация и вход, без привязки к HTTP и БД.
 
 ## Документация
 
@@ -21,6 +22,7 @@
 - `flagx`: [README](./flagx/README.md)
 - `logx`: [README](./logx/README.md)
 - `middlewarex`: [README](./middlewarex/README.md)
+- `passkeys`: [README](./passkeys/README.md), [матрица приёмки](./passkeys/acceptance.md)
 
 ## Lint
 
