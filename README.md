@@ -14,6 +14,8 @@
 - `middlewarex` — generic middleware core + `net/http` adapters.
 - `passkeys` — experimental WebAuthn RP: ES256/none, регистрация и вход, без привязки к HTTP и БД.
 
+- `sqltx` — выполнение функции в транзакции `database/sql`.
+
 ## Документация
 
 - `configx`: [README](./configx/README.md)
@@ -23,6 +25,8 @@
 - `logx`: [README](./logx/README.md)
 - `middlewarex`: [README](./middlewarex/README.md)
 - `passkeys`: [README](./passkeys/README.md), [матрица приёмки](./passkeys/acceptance.md)
+
+- `sqltx`: [README](./sqltx/README.md)
 
 ## Lint
 
